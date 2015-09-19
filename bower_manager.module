@@ -36,7 +36,7 @@ function _bower_manager_update_extend_file($source_file, $target_file) {
   ksort($target_json_array['dependencies']);
 
   $target_json = json_encode($target_json_array, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-  // Convert four spaces identation to two spaces identation.
+  // Convert four spaces indentation to two spaces indentation.
   $target_json = str_replace(array('    ', '|tab|'), array('|tab|', '  '), $target_json);
 
   file_put_contents($target_file, $target_json . "\r\n");
