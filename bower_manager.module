@@ -1,0 +1,43 @@
+<?php
+/**
+ * Implements hook_modules_enabled().
+ */
+function bower_manager_modules_enabled($modules) {
+  bower_manager_update($modules);
+}
+
+function bower_manager_update($modules = NULL) {
+  // Check if a bower.json file exists in the default theme.
+  $target_file = drupal_get_path('theme', variable_get('theme_default')) . '/bower.json';
+  if (!is_file($target_file)) {
+    return;
+  }
+
+  // Scan in all modules if no modules are specified.
+  if (!isset($modules)) {
+    $modules = module_list();
+  }
+
+  $modules = is_array($modules) ? $modules : array($modules);
+  // Scan modules for bower.json files.
+  foreach ($modules as $module) {
+    $source_file = drupal_get_path('module', $module) . '/bower.json';
+    if (is_file($source_file)) {
+      _bower_manager_update_extend_file($source_file, $target_file);
+    }
+  }
+}
+
+function _bower_manager_update_extend_file($source_file, $target_file) {
+  $source_json_array = json_decode(file_get_contents($source_file), TRUE);
+  $target_json_array = json_decode(file_get_contents($target_file), TRUE);
+
+  $target_json_array['dependencies'] = array_merge($target_json_array['dependencies'], $source_json_array['dependencies']);
+  ksort($target_json_array['dependencies']);
+
+  $target_json = json_encode($target_json_array, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+  // Convert four spaces identation to two spaces identation.
+  $target_json = str_replace(array('    ', '|tab|'), array('|tab|', '  '), $target_json);
+
+  file_put_contents($target_file, $target_json . "\r\n");
+}

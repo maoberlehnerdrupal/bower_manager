@@ -1,0 +1,4 @@
+name = Bower Manager
+description = Provides management of third-party, bower packages that are required by contributed modules.
+core = 7.x
+package = Other
