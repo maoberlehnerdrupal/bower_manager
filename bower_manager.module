@@ -1,4 +1,10 @@
 <?php
+
+/**
+ * @file
+ * Bower Manager module.
+ */
+
 /**
  * Implements hook_modules_enabled().
  */
@@ -6,6 +12,11 @@ function bower_manager_modules_enabled($modules) {
   bower_manager_update($modules);
 }
 
+/**
+ * Scan the passed (or all enabled) modules for bower.json
+ * files and update the bower.json of the default theme.
+ * @param  mixed $modules an array of module names or a single module name as string
+ */
 function bower_manager_update($modules = NULL) {
   // Check if a bower.json file exists in the default theme.
   $target_file = drupal_get_path('theme', variable_get('theme_default')) . '/bower.json';
@@ -28,6 +39,12 @@ function bower_manager_update($modules = NULL) {
   }
 }
 
+/**
+ * Merge the bower dependencies of a source bower.json
+ * file into a target.json file.
+ * @param  string $source_file path to the source bower.json
+ * @param  string $target_file path to the target bower.json
+ */
 function _bower_manager_update_extend_file($source_file, $target_file) {
   $source_json_array = json_decode(file_get_contents($source_file), TRUE);
   $target_json_array = json_decode(file_get_contents($target_file), TRUE);
