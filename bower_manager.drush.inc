@@ -1,6 +1,11 @@
 <?php
 
 /**
+ * @file
+ * Drush commands for Bower Manager.
+ */
+
+/**
  * Implements hook_drush_command().
  */
 function bower_manager_drush_command() {
