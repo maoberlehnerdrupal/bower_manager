@@ -13,9 +13,10 @@ function bower_manager_modules_enabled($modules) {
 }
 
 /**
- * Scan the passed (or all enabled) modules for bower.json
- * files and update the bower.json of the default theme.
- * @param  mixed $modules an array of module names or a single module name as string
+ * Scan the passed (or all enabled) modules for bower.json files.
+ *
+ * @param mixed $modules
+ *   An array of module names or a single module name as string.
  */
 function bower_manager_update($modules = NULL) {
   // Check if a bower.json file exists in the default theme.
@@ -40,10 +41,12 @@ function bower_manager_update($modules = NULL) {
 }
 
 /**
- * Merge the bower dependencies of a source bower.json
- * file into a target.json file.
- * @param  string $source_file path to the source bower.json
- * @param  string $target_file path to the target bower.json
+ * Merge bower dependencies of a source bower.json file into a target.json file.
+ *
+ * @param string $source_file
+ *   Path to the source bower.json.
+ * @param string $target_file
+ *   Path to the target bower.json.
  */
 function _bower_manager_update_extend_file($source_file, $target_file) {
   $source_json_array = json_decode(file_get_contents($source_file), TRUE);
