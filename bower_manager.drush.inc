@@ -1,5 +1,4 @@
 <?php
-
 /**
  * @file
  * Drush commands for Bower Manager.
