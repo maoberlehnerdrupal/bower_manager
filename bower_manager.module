@@ -24,6 +24,11 @@ function bower_manager_update($modules = NULL) {
     return;
   }
 
+  // Get moodule names from drush option.
+  if ($option_modules = drush_get_option('modules', NULL)) {
+    $modules = explode(',', $option_modules);
+  }
+
   // Scan in all modules if no modules are specified.
   if (!isset($modules)) {
     $modules = module_list();
