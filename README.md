@@ -34,6 +34,8 @@ dependencies to you theme as you usually would do with `drupal_add_css()`,
 `drupal_add_js()` or in the info file of your theme.
 
 ## About
+Github: https://github.com/maoberlehnerdrupal/bower_manager
+
 ### Author
 Markus Oberlehner  
 Twitter: https://twitter.com/MaOberlehner
