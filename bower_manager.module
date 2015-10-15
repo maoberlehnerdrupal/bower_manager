@@ -5,6 +5,24 @@
  */
 
 /**
+ * Implements hook_menu().
+ */
+function bower_manager_menu() {
+  $items = array();
+
+  $items['admin/config/system/bower-manager'] = array(
+    'title' => 'Bower Manager',
+    'description' => 'Configure the Bower Manager system settings.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('bower_manager_admin_page'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'bower_manager.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
  * Implements hook_modules_enabled().
  */
 function bower_manager_modules_enabled($modules) {
@@ -18,8 +36,10 @@ function bower_manager_modules_enabled($modules) {
  *   An array of module names or a single module name as string.
  */
 function bower_manager_update($modules = NULL) {
-  // Check if a bower.json file exists in the default theme.
-  $target_file = drupal_get_path('theme', variable_get('theme_default')) . '/bower.json';
+  // Check if the provided bower.json file exists.
+  $target_file = variable_get('bower_manager_json_target', '!default-theme/bower.json');
+  $target_file = format_string($target_file, array('!default-theme' => drupal_get_path('theme', variable_get('theme_default'))));
+
   if (!is_file($target_file)) {
     return;
   }
