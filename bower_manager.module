@@ -71,13 +71,14 @@ function bower_manager_update() {
 function _bower_manager_update_bowerrc() {
   $path = _bower_manager_get_path();
   $bowerrc_file = $path . '/.bowerrc';
+  $libraries_dir = _bower_manager_relative_dir(DRUPAL_ROOT . '/sites/all/libraries', $path);
 
   if (file_exists($bowerrc_file)) {
     $bowerrc_json = _bower_manager_read_json_file($bowerrc_file);
-    $bowerrc_json['directory'] = _bower_manager_relative_dir('sites/all/libraries', $path);
+    $bowerrc_json['directory'] = $libraries_dir;
   }
   else {
-    $bowerrc_json = array('directory' => _bower_manager_relative_dir('sites/all/libraries', $path));
+    $bowerrc_json = array('directory' => $libraries_dir);
   }
 
   _bower_manager_write_json_file($bowerrc_json, $bowerrc_file);
