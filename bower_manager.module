@@ -148,10 +148,10 @@ function _bower_manager_get_master() {
   $file = $path . '/bower.json';
 
   if (!file_exists($file)) {
-    // @todo See if we want anything else in the default bower.json
     $json = array(
       'name' => variable_get('site_name', ''),
       'dependencies' => array(),
+      'devDependencies' => array(),
     );
 
     _bower_manager_put_master($json);
@@ -227,19 +227,19 @@ function _bower_manager_write_json_file($json, $path) {
  * @param array $source
  */
 function _bower_manager_merge_json(&$target, $source) {
-  $check_for_version_conflicts = array('dependencies', 'dependenciesDev');
+  $merge_keys = array('dependencies', 'devDependencies');
 
-  foreach ($source as $key => $value) {
-    if (in_array($key, $check_for_version_conflicts) && is_array($source[$key])) {
-      foreach ($value as $dependency_name => $dependency_version) {
-        // We have the same dependency defined in different modules.
-        if (array_key_exists($dependency_name, $target[$key])) {
-          $value[$dependency_name] = _bower_manager_resolve_version_conflict($target[$key][$dependency_name], $value[$dependency_name]);
-        }
+  foreach ($merge_keys as $merge_key) {
+    $dependencies = isset($source[$merge_key]) ? $source[$merge_key] : array();
+
+    foreach ($dependencies as $name => $version) {
+      // We have the same dependency defined in different modules.
+      if (array_key_exists($name, $target[$merge_key])) {
+        $version = _bower_manager_resolve_version_conflict($target[$merge_key][$name], $version);
       }
-    }
 
-    $target[$key] = $value;
+      $target[$merge_key][$name] = $version;
+    }
   }
 }
 
