@@ -51,12 +51,34 @@ function bower_manager_update() {
   // exist create it.
   $bower_json = _bower_manager_get_master();
 
+  // Create a flat array of dependency names so we can compare to the final list.
+  $dependencies = array();
+
   // Merge the data into the master bower.json.
   foreach ($collected_json as $json) {
     _bower_manager_merge_json($bower_json, $json);
+
+    foreach (array('dependencies', 'devDependencies') as $key) {
+      if (isset($json[$key]) && is_array($json[$key])) {
+        foreach ($json[$key] as $name => $version) {
+          $dependencies[] = $name;
+        }
+      }
+    }
   }
 
-  // @todo Handle removed dependencies.
+  // Remove dependencies not used any more
+  foreach (array('dependencies', 'devDependencies') as $key) {
+    if (!isset($bower_json[$key]) || !is_array($bower_json[$key])) {
+      $bower_json[$key] = array();
+    }
+
+    foreach ($bower_json[$key] as $name => $version) {
+      if (!in_array($name, $dependencies)) {
+        unset($bower_json[$key][$name]);
+      }
+    }
+  }
 
   // Write the master bower.json.
   _bower_manager_put_master($bower_json);
