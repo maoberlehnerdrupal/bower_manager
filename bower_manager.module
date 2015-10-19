@@ -23,65 +23,296 @@ function bower_manager_menu() {
 }
 
 /**
- * Implements hook_modules_enabled().
+ * Implements hook_modules_installed().
+ *
+ * @see hook_modules_installed()
  */
-function bower_manager_modules_enabled($modules) {
-  bower_manager_update($modules);
+function bower_manager_modules_installed() {
+  bower_manager_update();
 }
 
 /**
- * Scan the passed (or all enabled) modules for bower.json files.
+ * Implements hook_modules_uninstalled().
  *
- * @param mixed $modules
- *   An array of module names or a single module name as string.
+ * @see hook_modules_uninstalled()
  */
-function bower_manager_update($modules = NULL) {
-  // Check if the provided bower.json file exists.
-  $target_file = variable_get('bower_manager_json_target', '!default-theme/bower.json');
-  $target_file = format_string($target_file, array('!default-theme' => drupal_get_path('theme', variable_get('theme_default'))));
+function bower_manager_modules_uninstalled() {
+  bower_manager_update();
+}
 
-  if (!is_file($target_file)) {
-    return;
+/**
+ * Rebuilds the master bower.json file.
+ */
+function bower_manager_update() {
+  // Collect the data.
+  $collected_json = _bower_manager_fetch_data();
+
+  // Open the master bower.json file, if it doesn't
+  // exist create it.
+  $bower_json = _bower_manager_get_master();
+
+  // Create a flat array of dependency names so we can compare to the final list.
+  $dependencies = array();
+
+  // Merge the data into the master bower.json.
+  foreach ($collected_json as $json) {
+    _bower_manager_merge_json($bower_json, $json);
+
+    foreach (array('dependencies', 'devDependencies') as $key) {
+      if (isset($json[$key]) && is_array($json[$key])) {
+        foreach ($json[$key] as $name => $version) {
+          $dependencies[] = $name;
+        }
+      }
+    }
   }
 
-  // Get moodule names from drush option.
-  if ($option_modules = drush_get_option('modules', NULL)) {
-    $modules = explode(',', $option_modules);
+  // Remove dependencies not used any more
+  foreach (array('dependencies', 'devDependencies') as $key) {
+    if (!isset($bower_json[$key]) || !is_array($bower_json[$key])) {
+      $bower_json[$key] = array();
+    }
+
+    foreach ($bower_json[$key] as $name => $version) {
+      if (!in_array($name, $dependencies)) {
+        unset($bower_json[$key][$name]);
+      }
+    }
   }
 
-  // Scan in all modules if no modules are specified.
-  if (!isset($modules)) {
-    $modules = module_list();
+  // Write the master bower.json.
+  _bower_manager_put_master($bower_json);
+
+  // Update .bowerrc
+  _bower_manager_update_bowerrc();
+}
+
+/**
+ * Updates .bowerrc to have the correct path to sites/all/libraries.
+ */
+function _bower_manager_update_bowerrc() {
+  $path = _bower_manager_get_path();
+  $bowerrc_file = $path . '/.bowerrc';
+  $libraries_dir = _bower_manager_relative_dir(DRUPAL_ROOT . '/sites/all/libraries', $path);
+
+  if (file_exists($bowerrc_file)) {
+    $bowerrc_json = _bower_manager_read_json_file($bowerrc_file);
+    $bowerrc_json['directory'] = $libraries_dir;
+  }
+  else {
+    $bowerrc_json = array('directory' => $libraries_dir);
   }
 
-  $modules = is_array($modules) ? $modules : array($modules);
-  // Scan modules for bower.json files.
-  foreach ($modules as $module) {
-    $source_file = drupal_get_path('module', $module) . '/bower.json';
-    if (is_file($source_file)) {
-      _bower_manager_update_extend_file($source_file, $target_file);
+  _bower_manager_write_json_file($bowerrc_json, $bowerrc_file);
+}
+
+/**
+ * Scans modules, themes and profiles for bower.json files and
+ * collects the data from them.
+ *
+ * @return array
+ *   Keys are names of the modules and values are the
+ *   contents of their bower json file.
+ */
+function _bower_manager_fetch_data() {
+  // Collect all paths where we could find bower.json.
+  $paths = array();
+
+  // - all enabled modules
+  foreach (module_list() as $module) {
+    $paths[$module] = drupal_get_path('module', $module);
+  }
+
+  // - all enabled themes
+  foreach (list_themes() as $theme_key => $theme) {
+    if ($theme->status == 1) {
+      $paths[$theme_key] = drupal_get_path('theme', $theme_key);
+    }
+  }
+
+  // - installed profile
+  $profile = drupal_get_profile();
+  $paths[$profile] = drupal_get_path('profile', $profile);
+
+  // Collect the data from available bower.json files
+  $collected_json = array();
+
+  foreach ($paths as $key => $path) {
+    $bower_file = $path . '/bower.json';
+    if (file_exists($bower_file)) {
+      $collected_json[$key] = _bower_manager_read_json_file($bower_file);
+    }
+  }
+
+  return $collected_json;
+}
+
+/**
+ * Returns the path where we store our bower.json and .bowerrc files.
+ *
+ * We use a central place for getting this so we can change the default path easily.
+ *
+ * @return string
+ */
+function _bower_manager_get_path() {
+  $path_uri = variable_get('bower_manager_path', file_default_scheme() . '://bower');
+  return drupal_realpath($path_uri);
+}
+
+/**
+ * Returns the json of the master bower.json file.
+ *
+ * If the file doesn't exist creates it.
+ *
+ * @return array
+ */
+function _bower_manager_get_master() {
+  $path = _bower_manager_get_path();
+  $file = $path . '/bower.json';
+
+  if (!file_exists($file)) {
+    $json = array(
+      'name' => variable_get('site_name', ''),
+      'dependencies' => array(),
+      'devDependencies' => array(),
+    );
+
+    _bower_manager_put_master($json);
+  }
+
+  return _bower_manager_read_json_file($file);
+}
+
+/**
+ * Saves json data to the master bower.json file.
+ *
+ * @param array $json
+ */
+function _bower_manager_put_master($json) {
+  $path = _bower_manager_get_path();
+  $file = $path . '/bower.json';
+
+  if (!is_dir($path)) {
+    if (!drupal_mkdir($path, NULL, $recursive = true)) {
+      throw new \RuntimeException(t('Error creating the Bower Manager dir: @path', array('@path' => $path)));
+    }
+  }
+
+  _bower_manager_write_json_file($json, $file);
+}
+
+/**
+ * Reads json from $file_path.
+ *
+ * @param string $path
+ * @return array
+ */
+function _bower_manager_read_json_file($path) {
+  $args = array('@file' => $path);
+
+  if (!file_exists($path)) {
+    throw new \RuntimeException(t("File not found: @file.", $args));
+  }
+
+  if (!$file_data = @file_get_contents($path)) {
+    throw new \RuntimeException(t('Error reading file: @file', $args));
+  }
+
+  if (!$file_json = @drupal_json_decode($file_data)) {
+    throw new \UnexpectedValueException(t('Expecting contents of file to be valid JSON: @file', $args));
+  }
+
+  return $file_json;
+}
+
+function _bower_manager_write_json_file($json, $path) {
+  // Make the json file human readable for PHP >= 5.4.
+  // @see drupal_json_encode()
+  // @see http://drupal.org/node/1943608
+  // @see http://drupal.org/node/1948012
+  $json_options = JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT;
+  if (defined('JSON_PRETTY_PRINT')) {
+    $json_options = $json_options | JSON_PRETTY_PRINT;
+  }
+  if (defined('JSON_UNESCAPED_SLASHES')) {
+    $json_options = $json_options | JSON_UNESCAPED_SLASHES;
+  }
+
+  if (!@file_put_contents($path, json_encode($json, $json_options))) {
+    throw new \RuntimeException(t('Error writing json file: @file', array('@file' => $path)));
+  }
+}
+
+/**
+ * Merges a module bower.json to the master file.
+ *
+ * @param array $target
+ * @param array $source
+ */
+function _bower_manager_merge_json(&$target, $source) {
+  $merge_keys = array('dependencies', 'devDependencies');
+
+  foreach ($merge_keys as $merge_key) {
+    $dependencies = isset($source[$merge_key]) ? $source[$merge_key] : array();
+
+    foreach ($dependencies as $name => $version) {
+      // We have the same dependency defined in different modules.
+      if (array_key_exists($name, $target[$merge_key])) {
+        $version = _bower_manager_resolve_version_conflict($target[$merge_key][$name], $version);
+      }
+
+      $target[$merge_key][$name] = $version;
     }
   }
 }
 
 /**
- * Merge bower dependencies of a source bower.json file into a target.json file.
+ * Tries to use the correct version considering different module needs.
  *
- * @param string $source_file
- *   Path to the source bower.json.
- * @param string $target_file
- *   Path to the target bower.json.
+ * @param string $current
+ * @param string $new
+ * @return string
  */
-function _bower_manager_update_extend_file($source_file, $target_file) {
-  $source_json_array = json_decode(file_get_contents($source_file), TRUE);
-  $target_json_array = json_decode(file_get_contents($target_file), TRUE);
+function _bower_manager_resolve_version_conflict($current, $new) {
+  // @todo Figure out how we could resolve these automatically.
+  // i.e.
+  // $current = 2.* or ~2.1
+  // $new = 2.1.*
+  // should resolve to 2.1.*
+  return $new;
+}
 
-  $target_json_array['dependencies'] = array_merge($target_json_array['dependencies'], $source_json_array['dependencies']);
-  ksort($target_json_array['dependencies']);
+/**
+ * Gets the path of the "to" directory relative to the "from" directory.
+ *
+ * Stolen from Composer Manager
+ *
+ * @param array $dir_to
+ *   The absolute path of the directory that the relative path refers to.
+ * @param array $dir_from
+ *   The absolute path of the directory from which the relative path is being
+ *   calculated.
+ *
+ * @return string
+ */
+function _bower_manager_relative_dir($dir_to, $dir_from) {
+  $dirs_to = explode('/', ltrim($dir_to, '/'));
+  $dirs_from = explode('/', ltrim($dir_from, '/'));
 
-  $target_json = json_encode($target_json_array, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-  // Convert four spaces indentation to two spaces indentation.
-  $target_json = str_replace(array('    ', '|tab|'), array('|tab|', '  '), $target_json);
+  // Strip the matching directories so that both arrays are relative to a common
+  // position. The count of the $dirs_from array tells us how many levels up we
+  // need to traverse from the directory containing the composer.json file, and
+  // $dirs_to is relative to the common position.
+  foreach ($dirs_to as $pos => $dir) {
+    if (!isset($dirs_from[$pos]) || $dirs_to[$pos] != $dirs_from[$pos]) {
+      break;
+    }
+    unset($dirs_to[$pos], $dirs_from[$pos]);
+  }
 
-  file_put_contents($target_file, $target_json . "\r\n");
+  $path = str_repeat('../', count($dirs_from)) . join('/', $dirs_to);
+  if (PHP_OS == 'WINNT'){
+    $path = preg_replace('%..\\/([a-zA-Z])%i', '${1}', $path, 1);
+  }
+  return $path;
 }
