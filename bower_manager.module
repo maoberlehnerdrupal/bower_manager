@@ -45,7 +45,7 @@ function bower_manager_update($modules = NULL) {
   }
 
   // Get moodule names from drush option.
-  if ($option_modules = drush_get_option('modules', NULL)) {
+  if (function_exists('drush_get_option') && $option_modules = drush_get_option('modules', NULL)) {
     $modules = explode(',', $option_modules);
   }
 
